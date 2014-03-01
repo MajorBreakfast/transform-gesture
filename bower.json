@@ -1,0 +1,14 @@
+{
+  "name": "transform-gesture",
+  "version": "0.0.1",
+  "homepage": "https://github.com/MajorBreakfast/transform-gesture",
+  "authors": [
+    "Josef Brandl"
+  ],
+  "description": "A transform gesture recognizer built on pointer events",
+  "main": "transform-gesture.js",
+  "keywords": [
+    "gesture", "pointer", "events"
+  ],
+  "license": "MIT"
+}
