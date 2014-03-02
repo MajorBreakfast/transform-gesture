@@ -1,6 +1,6 @@
 # transform-gesture
 
-**Currently under development. Come back in a few days. (Mid of march 2014 or something)**
+**Currently under development. Although everything now works as advertised, it still needs a lot of cleanup. Come back in a few days (Mid of march 2014 or something).**
 
 `TransformGesture` is a standalone library that interprets pointer events ([YouTube - Talk about pointer events](http://www.youtube.com/watch?v=l8upftEWslM)) for you. It supplies you with simple information like `translation`, `scale` and `rotation`.
 
@@ -17,8 +17,6 @@ Second, the source of this library is clean and well documented. The math is exp
 And finally, the implementation is rock solid, because it supports direct manipulation. That means if you scale something, it really zooms in at the part between your fingers and not somewhere else (e.g. at the center). It can even deal with **pinch to zoom using all 10 fingers while moving the browser window**! Don't take my word for it. Try it for yourself in the demos. (Btw. I think that only IE11 lets you move/resize the window while touching the screen somewhere else)
 
 ## Issues/Feature requests/Development
-Note: Some things stated in this README are currently lies :) The only thing that's definitely true is: **It's under heavy development right now. Come back once everything is done!**
-
 The name "transform-gesture" makes the scope of this library pretty clear, e.g. recognizing long presses is out of scope. However, I care very much about developer ergonomics. That is, if you're building a library that depends on transform-gesture and you need aditional public APIs to make the integration clean, I'd be happy to talk it through! Also, there is certainly functionality that can be considered in the scope of this library. If you have any ideas, just open an issue or submit a pull request. (Even if you just spotted a typo :)
 
 ## Usage
@@ -39,8 +37,14 @@ For the translation the pointers' center of mass is calculated (Average of the p
 ### Scaling
 Sum up the distances of the pointer positions to the center of mass of the pointer positions. Compare this sum to a reference value computed in the same way.
 
+### Rotation
+Determine the two pointers in the reference set that are widest apart and compute the angle of their connecting line. Then compute the equivalent line with the current pointer positions. The rotation is determined by the angle difference of that line's angle to the reference angle.
+
 ### Translation adjustment
 The center for scaling and rotation is of course the center of mass of the pointer positions. Since this is most likely not the origin of the to be transformed object the translation has to be adjusted to make the object stick to the fingers. The adjustment vector is the scaled and rotated vector from the reference center of mass to the reference translation. The final translation is the the reference translation plus this adjustment vector.
+
+### State
+To increase computational accuracy, transform-gesture stores the translation, rotation and scale in two stages: Base and interim. The final translation/rotation is computed by adding up the base and interim translation/rotation. The final scale is computed by multiplying the base and interim scale. Each time a new pointer is added or an old pointer removed, the base state is updated and the interim state is reset (translation=(0,0), scale=1, rotation=0).
 
 ### Translation (Alternative approach, not implemented)
 Determine translation by averaging the position differences of the pointers with the same id in the current pointer set and the reference pointer set.
