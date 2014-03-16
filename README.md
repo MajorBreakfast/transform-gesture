@@ -1,6 +1,6 @@
 # transform-gesture
 
-**Currently under development. Although everything now works as advertised, it still needs a lot of cleanup. Come back in a few days (Mid of march 2014 or something).**
+**Currently under development. Although everything now works as advertised, it still needs a lot of cleanup and demos. Come back in a few days (End of march 2014 or something).**
 
 `TransformGesture` is a standalone library that interprets pointer events ([YouTube - Talk about pointer events](http://www.youtube.com/watch?v=l8upftEWslM)) for you. It supplies you with simple information like `translation`, `scale` and `rotation`.
 
@@ -19,16 +19,45 @@ And finally, the implementation is rock solid, because it supports direct manipu
 ## Issues/Feature requests/Development
 The name "transform-gesture" makes the scope of this library pretty clear, e.g. recognizing long presses is out of scope. However, I care very much about developer ergonomics. That is, if you're building a library that depends on transform-gesture and you need aditional public APIs to make the integration clean, I'd be happy to talk it through! Also, there is certainly functionality that can be considered in the scope of this library. If you have any ideas, just open an issue or submit a pull request. (Even if you just spotted a typo :)
 
-## Usage
+## Usage example
 ``` JavaScript
-var gesture = new TransformGesture({translate: true, rotate: true, scale: true});
-gesture.target = yourElement;
-yourElement.addEventListener('pointerdown', function(event) { gesture.addPointer(event) });
+var gesture = new TransformGesture({ canRotate: true, canScale: true, eventTarget: yourElement })
 
-yourElement.addEventListener('transformgesturestart', function(event) { ... });
-yourElement.addEventListener('transformgesture'     , function(event) { ... });
-yourElement.addEventListener('transformgestureend'  , function(event) { ... });
+yourElement.addEventListener('pointerdown', function(event) { gesture.addPointer(event) })
+
+yourElement.addEventListener('transformgesturestart',  function(event) { /* event.gesture */ ... })
+yourElement.addEventListener('transformgesturechange', function(event) { ... })
+yourElement.addEventListener('transformgestureend',    function(event) { ... })
 ```
+
+## Properties / Options
+All these properties can either be set directly on the gesture object or via the options hash in the constructor.
+
+- `eventTarget` (Default: null) Defines the DOM element to which the gesture events should be sent.
+- `canRotate`, 'canScale' (Default: `false`) These two properties determine whether rotation and scaling are enabled or not. By default both are disabled because either generally require you to define the `coordinateTransformation` as well to work properly. transform-gesture still does a better job for just dragging than most alternative solutions because it doesn't jitter or stop working if two or more finger hit the screen. It is definitly not overkill to use it just for dragging. By the way there is no `canTranslate` property because rotation and scaling require translation which makes tranlation madatory.
+- `coordinateTransformation` (Default: `function(v) { return v }`) Defines a coordinate transformation form window coordinates (origin top left corner) to the coordinate system of the element you're working in.
+  Examples:
+  ``` JavaScript
+  function(vec) { // For CSS transform-origin: top left
+    return {
+      x: vec.x - $('.transformed').offset().left
+      y: vec.y - $('.transformed').offset().top
+    }
+  }
+  ```
+  ``` JavaScript
+  function(vec) { // For CSS transform-origin: 50% 50% (Default)
+    return {
+      x: vec.x - $('.transformed').offset().left - $('.transformed').width()/2
+      y: vec.y - $('.transformed').offset().top - $('.transformed').height()/2
+    }
+  }
+  ```
+  Admittedly it is a bit hard to wrap your head around how this property works. But transform-gesture cannot do its job without it. This property is basically the reason why the object sticks to your finger even while scaling and rotating. Take a look at the demos to see the whole setup in context.
+- `translationX`, `translationY`, 'rotation', 'scale' (Readonly) These properties are basically the end result
+
+## jQuery
+Although transform-gesture doesn't depend on jQuery, you can certainly use both together. Note that using jQuery means that the `event.gesture` property is then located under `event.originalEvent.gesture`.
 
 ## Algorithmns
 ### Translation

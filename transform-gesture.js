@@ -49,6 +49,7 @@ TransformGesture.prototype.addPointer = function(event) {
     this.idsOfPointersDown.push(event.pointerId)
 
     // After
+    this.cache = null
     this.grabNewReferenceValues()
     if(this.idsOfPointersDown.length === 1) { // Is first pointer
       this.sendGestureStartEvent()
@@ -67,6 +68,7 @@ TransformGesture.prototype.pointerUp = function(event) {
     this.idsOfPointersDown.splice(index, 1)
 
     // After
+    this.cache = null
     this.grabNewReferenceValues()
     if(this.idsOfPointersDown.length === 0) { // Was last pointer
       this.doNotSendGestureChangeEventLater()
@@ -82,6 +84,7 @@ TransformGesture.prototype.pointerCancel = function(event) {
 TransformGesture.prototype.pointerMove = function(event) {
   if (this.pointersDown[event.pointerId]) { // Is it a pointer for this gesture?
     this.storePointerInfoFromEvent(event)
+    this.cache = null
     this.sendGestureChangeEventLater()
   }
 }
@@ -127,20 +130,9 @@ TransformGesture.prototype.doNotSendGestureChangeEventLater = function() {
 
 TransformGesture.prototype.sendEvent = function(eventName) {
   if (this.eventTarget) {
-    var event = document.createEvent('Event'),
-        translation = this.translation,
-        pointersCenter = this.pointersCenter || this.lastCenter
-
+    var event = document.createEvent('Event')
     event.initEvent(eventName, true, true)
-
-    event.pointersCount = this.idsOfPointersDown.length
-    event.translationX = translation.x
-    event.translationY = translation.y
-    event.scale = this.scale
-    event.rotation = this.rotation
-    event.pointersCenterX = pointersCenter.x
-    event.pointersCenterY = pointersCenter.y
-
+    event.gesture = this
     this.eventTarget.dispatchEvent(event)
   }
 }
@@ -161,7 +153,7 @@ TransformGesture.prototype.grabNewReferenceValues = function() {
   this.referenceGreatestPointersDistanceInfo = this.greatestPointersDistanceInfo
 }
 
-defineProperty("pointersCenter", { get: function() {
+defineProperty("pointersCenter", { get: useCaching(function() {
   var count = this.idsOfPointersDown.length
 
   if (count === 0) { return null }
@@ -172,9 +164,9 @@ defineProperty("pointersCenter", { get: function() {
 
   // Note: this.lastCenter is used in addValuesToEvent()
   return (this.lastCenter = new Vector2D(sum.x/count, sum.y/count))
-}})
+})})
 
-defineProperty("sumOfDistancesToPointersCenter", { get: function() {
+defineProperty("sumOfDistancesToPointersCenter", { get: useCaching(function() {
   if (this.idsOfPointersDown.length === 0) { return null }
 
   var pointersCenter = this.pointersCenter
@@ -182,9 +174,9 @@ defineProperty("sumOfDistancesToPointersCenter", { get: function() {
   return this.idsOfPointersDown.reduce(function(sum, id) {
     return sum + this.pointersDown[id].position.distanceTo(pointersCenter)
   }.bind(this), 0)
-}})
+})})
 
-defineProperty("greatestPointersDistanceInfo", { get: function() {
+defineProperty("greatestPointersDistanceInfo", { get: useCaching(function() {
   return this.idsOfPointersDown.reduce(function(info, id1) {
     return this.idsOfPointersDown.reduce(function(info, id2) {
       if (id1 >= id2) { return info } // => Don't check twice
@@ -205,16 +197,16 @@ defineProperty("greatestPointersDistanceInfo", { get: function() {
       } else { return info }
     }.bind(this), info)
   }.bind(this), {distance: 0, pointerId1: null, pointerId2: null})
-}})
+})})
 
 // Scaling relative to base
-defineProperty("interimScale", { get: function() {
+defineProperty("interimScale", { get: useCaching(function() {
   var count = this.idsOfPointersDown.length
   return (this.canScale && count >= 2) ? (this.sumOfDistancesToPointersCenter /
                                           this.referenceSumOfDistancesToPointersCenter) : 1
-}})
+})})
 
-defineProperty("interimRotation", { get: function() {
+defineProperty("interimRotation", { get: useCaching(function() {
   if (this.canRotate && this.idsOfPointersDown.length >= 2) {
 
     var refInfo = this.referenceGreatestPointersDistanceInfo,
@@ -226,13 +218,13 @@ defineProperty("interimRotation", { get: function() {
   } else {
     return 0
   }
-}})
+})})
 
 
 
 // --- Translation, scale, rotation ---
 
-defineProperty("translation", { get: function() {
+defineProperty("translation", { get: useCaching(function() {
   var pointersCenter = this.pointersCenter
 
   // Note: This function is also called when no pointers are on screen
@@ -248,7 +240,9 @@ defineProperty("translation", { get: function() {
   } else {
     return this.baseTranslation
   }
-}})
+})})
+defineProperty("translationX", { get: function() { return this.translation.x }})
+defineProperty("translationY", { get: function() { return this.translation.y }})
 
 defineProperty("scale", { get: function() {
   return this.baseScale*this.interimScale
@@ -260,7 +254,7 @@ defineProperty("rotation", { get: function() {
 
 
 
-// --- Helpers ---
+// --- Vector2D Helper Class ---
 
 var Vector2D = function(x,y) {
   if (x instanceof Object) {
@@ -291,5 +285,24 @@ Vector2D.prototype.rotateClockwise = function(radians) {
   return new Vector2D( this.x*cos(radians) + this.y*sin(radians),
                       -this.x*sin(radians) + this.y*cos(radians))
 }
+
+
+
+// --- Caching ---
+
+// Use simple caching to avoid recalculations if no pointers changed
+// Note: `this.cache = null` clears the cache
+function useCaching(func) {
+  var cacheIndex
+  return function() {
+    if (!this.cache) { this.cache = {} }
+    if (!this.cacheIndexCounter) { this.cacheIndexCounter = 1 }
+    if (!cacheIndex) { cacheIndex = this.cacheIndexCounter++ }
+
+    return this.cache[cacheIndex] ? this.cache[cacheIndex] :
+                                    this.cache[cacheIndex] = func.apply(this)
+  }
+}
+
 
 export default TransformGesture
