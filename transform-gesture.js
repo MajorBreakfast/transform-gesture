@@ -41,34 +41,37 @@ TransformGesture.prototype.addPointer = function(event) {
     console.warn('Transform Gesture: Discovered pointer that was not ' +
                  'properly removed.')
   } else {
-    // Notify before
-    if(this.idsOfPointersDown.length === 0) { this.firstPointerWillGetAdded() }
-    this.pointersDownArrayWillChange()
+    // Before
+    this.commitTransformationToBaseTransformation()
 
     // Add
-    this.pointersDown[event.pointerId] = this.extractEventValues(event)
+    this.storePointerInfoFromEvent(event)
     this.idsOfPointersDown.push(event.pointerId)
 
-    // Notify after
-    this.pointersDownArrayDidChange()
-    if(this.idsOfPointersDown.length === 1) { this.firstPointerDidGetAdded() }
+    // After
+    this.grabNewReferenceValues()
+    if(this.idsOfPointersDown.length === 1) { // Is first pointer
+      this.sendGestureStartEvent()
+    }
   }
 }
 
 TransformGesture.prototype.pointerUp = function(event) {
   if (this.pointersDown[event.pointerId]) {
-    // Notify before
-    if(this.idsOfPointersDown.length === 1) { this.lastPointerWillGetRemoved() }
-    this.pointersDownArrayWillChange()
+    // Before
+    this.commitTransformationToBaseTransformation()
 
     // Remove
     delete this.pointersDown[event.pointerId]
     var index = this.idsOfPointersDown.indexOf(event.pointerId)
     this.idsOfPointersDown.splice(index, 1)
 
-    // Notify after
-    this.pointersDownArrayDidChange()
-    if(this.idsOfPointersDown.length === 0) { this.lastPointerDidGetRemoved() }
+    // After
+    this.grabNewReferenceValues()
+    if(this.idsOfPointersDown.length === 0) { // Was last pointer
+      this.doNotSendGestureChangeEventLater()
+      this.sendGestureEndEvent()
+    }
   }
 }
 
@@ -78,130 +81,85 @@ TransformGesture.prototype.pointerCancel = function(event) {
 
 TransformGesture.prototype.pointerMove = function(event) {
   if (this.pointersDown[event.pointerId]) { // Is it a pointer for this gesture?
-    // Update
-    this.pointersDown[event.pointerId] = this.extractEventValues(event)
-
-    // Send event
+    this.storePointerInfoFromEvent(event)
     this.sendGestureChangeEventLater()
   }
 }
 
-
-// Used in addPointer and pointerUp
-TransformGesture.prototype.extractEventValues = function(event) {
+// Used in addPointer and pointerMove
+TransformGesture.prototype.storePointerInfoFromEvent = function(event) {
   var position = new Vector2D(event.clientX, event.clientY)
-  return {
+  this.pointersDown[event.pointerId] = {
     position: new Vector2D(this.coordinateTransformation(position))
   }
 }
 
 
 
-// --- Before/After Changes to pointersDown Object/Array ---
+// --- Events ---
 
-// On addition of first pointer
-TransformGesture.prototype.firstPointerWillGetAdded = function() {
+TransformGesture.prototype.sendGestureStartEvent = function() {
+  this.sendEvent('transformgesturestart')
 }
 
-TransformGesture.prototype.firstPointerDidGetAdded = function() {
-  this.sendGestureStartEvent()
+TransformGesture.prototype.sendGestureEndEvent = function() {
+  this.sendEvent('transformgestureend')
 }
 
-
-// On removal of last pointer
-TransformGesture.prototype.lastPointerWillGetRemoved = function() {
+function sendGestureChangeEvent() {
+  this.sendGestureEventChangeTimeout = null
+  this.sendEvent("transformgesturechange")
 }
 
-TransformGesture.prototype.lastPointerDidGetRemoved = function() {
-  // Explicitly unschedule the possibly scheduled further gesture event
+TransformGesture.prototype.sendGestureChangeEventLater = function() {
+  // Don't go overboard with gesture events, max one per ms
+  if (!this.sendGestureEventChangeTimeout) { // None scheduled, yet?
+    this.sendGestureEventChangeTimeout =
+      setTimeout(sendGestureChangeEvent.bind(this), 1)
+  }
+}
+
+TransformGesture.prototype.doNotSendGestureChangeEventLater = function() {
   clearTimeout(this.sendGestureEventChangeTimeout)
   this.sendGestureEventChangeTimeout = null
-
-  // End event
-  this.sendGestureEndEvent()
 }
 
 
-// On all pointer additions/removals
-TransformGesture.prototype.pointersDownArrayWillChange = function() {
+TransformGesture.prototype.sendEvent = function(eventName) {
+  if (this.eventTarget) {
+    var event = document.createEvent('Event'),
+        translation = this.translation,
+        pointersCenter = this.pointersCenter || this.lastCenter
+
+    event.initEvent(eventName, true, true)
+
+    event.pointersCount = this.idsOfPointersDown.length
+    event.translationX = translation.x
+    event.translationY = translation.y
+    event.scale = this.scale
+    event.rotation = this.rotation
+    event.pointersCenterX = pointersCenter.x
+    event.pointersCenterY = pointersCenter.y
+
+    this.eventTarget.dispatchEvent(event)
+  }
+}
+
+
+
+// --- Calculations ---
+
+TransformGesture.prototype.commitTransformationToBaseTransformation = function() {
   this.baseTranslation = this.translation
   this.baseScale = this.scale
   this.baseRotation = this.rotation
 }
 
-TransformGesture.prototype.pointersDownArrayDidChange = function() {
-  this.basePointersCenter = this.pointersCenter
-  this.baseSumOfDistancesToPointersCenter = this.sumOfDistancesToPointersCenter
-  this.baseGreatestPointersDistanceInfo = this.greatestPointersDistanceInfo
+TransformGesture.prototype.grabNewReferenceValues = function() {
+  this.referencePointersCenter = this.pointersCenter
+  this.referenceSumOfDistancesToPointersCenter = this.sumOfDistancesToPointersCenter
+  this.referenceGreatestPointersDistanceInfo = this.greatestPointersDistanceInfo
 }
-
-
-
-// --- Events ---
-
-// Start event
-TransformGesture.prototype.sendGestureStartEvent = function() {
-  if (this.eventTarget) {
-    var event = document.createEvent('Event')
-    event.initEvent('transformgesturestart', true, true)
-    this.addValuesToEvent(event)
-    this.eventTarget.dispatchEvent(event)
-  }
-}
-
-
-// End event
-TransformGesture.prototype.sendGestureEndEvent = function() {
-  if (this.eventTarget) {
-    var event = document.createEvent('Event')
-    event.initEvent('transformgestureend', true, true)
-    this.addValuesToEvent(event)
-    this.eventTarget.dispatchEvent(event)
-  }
-}
-
-
-// Change event
-TransformGesture.prototype.sendGestureChangeEventLater = function() {
-  // Don't go overboard with gesture events, max one per ms
-  if (!this.sendGestureEventChangeTimeout) { // None scheduled, yet?
-    this.sendGestureEventChangeTimeout =
-      setTimeout(this.sendGestureChangeEvent.bind(this), 1)
-  }
-}
-
-TransformGesture.prototype.sendGestureChangeEvent = function() {
-  this.sendGestureEventChangeTimeout = null
-
-  if (this.eventTarget) {
-    var event = document.createEvent('Event')
-    event.initEvent('transformgesture', true, true)
-    this.addValuesToEvent(event)
-    this.eventTarget.dispatchEvent(event)
-  }
-}
-
-
-// Adds event values (used in all events)
-TransformGesture.prototype.addValuesToEvent = function(event) {
-  event.pointersCount = this.idsOfPointersDown.length
-
-  var translation = this.translation
-  event.translationX = translation.x
-  event.translationY = translation.y
-
-  event.scale = this.scale
-
-  event.rotation = this.rotation
-
-  var pointersCenter = this.pointersCenter || this.lastCenter
-  event.pointersCenterX = pointersCenter.x
-  event.pointersCenterY = pointersCenter.y
-}
-
-
-
-// --- Intermediate calculations ---
 
 defineProperty("pointersCenter", { get: function() {
   var count = this.idsOfPointersDown.length
@@ -253,13 +211,13 @@ defineProperty("greatestPointersDistanceInfo", { get: function() {
 defineProperty("interimScale", { get: function() {
   var count = this.idsOfPointersDown.length
   return (this.canScale && count >= 2) ? (this.sumOfDistancesToPointersCenter /
-                                          this.baseSumOfDistancesToPointersCenter) : 1
+                                          this.referenceSumOfDistancesToPointersCenter) : 1
 }})
 
 defineProperty("interimRotation", { get: function() {
   if (this.canRotate && this.idsOfPointersDown.length >= 2) {
 
-    var refInfo = this.baseGreatestPointersDistanceInfo,
+    var refInfo = this.referenceGreatestPointersDistanceInfo,
         pos1 = this.pointersDown[refInfo.id1].position,
         pos2 = this.pointersDown[refInfo.id2].position,
         v = pos1.subtract(pos2)
@@ -280,10 +238,10 @@ defineProperty("translation", { get: function() {
   // Note: This function is also called when no pointers are on screen
   // => no pointersCenter and no translation
   if (pointersCenter) {
-    var basePointersCenterToBaseTrans =
-          this.baseTranslation.subtract(this.basePointersCenter),
+    var referencePointersCenterToBaseTrans =
+          this.baseTranslation.subtract(this.referencePointersCenter),
         pointersCenterToTrans =
-          basePointersCenterToBaseTrans.rotateClockwise(-this.interimRotation)
+          referencePointersCenterToBaseTrans.rotateClockwise(-this.interimRotation)
                                        .scale(this.interimScale)
 
     return pointersCenter.add(pointersCenterToTrans)
@@ -321,9 +279,7 @@ Vector2D.prototype.subtract = function(vec) {
 }
 
 Vector2D.prototype.distanceTo = function(vec) {
-  var a = this.x - vec.x,
-      b = this.y - vec.y
-  return Math.sqrt(a*a + b*b)
+  return Math.sqrt(Math.pow(this.x - vec.x, 2) + Math.pow(this.y - vec.y, 2))
 }
 
 Vector2D.prototype.scale = function(factor) {
