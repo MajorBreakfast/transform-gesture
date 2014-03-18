@@ -7,7 +7,7 @@
 Although pointer events are currently only available unprefixed in Internet Explorer 11, there exists a polyfill ([Polymer Pointer Events Polyfill](https://github.com/polymer/PointerEvents)) that makes them available in all modern browsers. The polyfill is available via bower as "pointerevents-polyfill".
 
 ## Installation
-This package is available via bower as `transform-gesture`.
+This package is available via bower and npm as `transform-gesture`. It currently uses the ES6 module syntax only. I'll add a version that exposes it as a global and a version that uses commonjs once it's ready.
 
 ## Why this package?
 First, most of the multitouch libraries out there perform all kind of hacks in order to be cross browser compatible. transform-gesture **doesn't use any hacks** because it simply builds on top of pointer events. If a browser doesn't support pointer events natively, then the hackery stays inside the polyfill - but it's not directly in this library.
